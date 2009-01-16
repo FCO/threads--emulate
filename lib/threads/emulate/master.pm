@@ -1,4 +1,7 @@
 package threads::emulate::master;
+use threads::emulate::master::Scalar;
+use threads::emulate::master::Array;
+use threads::emulate::master::Hash;
 
 sub _master {
     local $SIG{INT} = 'IGNORE';
