@@ -35,55 +35,75 @@ sub FETCH {
     print "FETCH(@_)$/" if $debug >= 2;
     my $self  = shift;
     my $index = shift;
+    $self->lock();
     my $value = $self->send( "FETCH:" . ( $self->get_id ) . ":$index" );
-    $self->get_ref_or_value($value);
+    my $ret;
+    my $txt = $self->get_obj_type_on_index($index);
+    if(defined $txt and $txt eq "1CODE1") {
+        $ret = eval "sub $value";
+    }else{
+        $ret = $self->get_ref_or_value($value);
+    }
+    $self->unlock();
+    $ret;
 }
 
 sub STORE {
     print "STORE(@_)$/" if $debug >= 2;
-    my $self  = shift();
-    my $index = shift;
-    my $value = shift;
+    my $self  = shift;
+    my $index = shift || return;
+    my $value = shift || return;
     print "lock()$/" if $debug >= 1;
-    $value =
-      ref $value ? threads::emulate::share::easyshare_attr($value) : $value;
-
-    #$self->send(join ":", "STORE", ($self->get_id), $index, $value);
-    $self->lock(&main::get_tid);
-    $self->send( join ":", "STORE", ( $self->get_id ),
+    $self->lock();
+    if(ref $value eq "CODE") {
+        $self->obj_type_on_index($index, "1CODE1");
+        use B::Deparse;
+        $value = B::Deparse->new->coderef2text($value);
+    }else{
+        $value =
+          ref $value ? threads::emulate::share::share($value) : $value;
+    }
+    my $ret = $self->send( join ":", "STORE", ( $self->get_id ),
         $index, $self->value_or_id($value) );
-    $self->unlock(&main::get_tid);
+    $self->unlock();
+    $ret;
 }
 
 sub DELETE {
     print "DELETE(@_)$/" if $debug >= 2;
     my $self  = shift;
     my $index = shift;
-    $self->lock(&main::get_tid);
+    $self->lock();
     $self->send( "DELETE:" . ( $self->get_id ) . ":$index" );
-    $self->unlock(&main::get_tid);
+    $self->unlock();
     $ret;
 }
 
 sub CLEAR {
     print "CLEAR(@_)$/" if $debug >= 2;
     my $self = shift;
-    $self->lock(&main::get_tid);
-    $self->send( "CLEAR:" . ( $self->get_id ) );
-    $self->unlock(&main::get_tid);
+    $self->lock();
+    my $ret = $self->send( "CLEAR:" . ( $self->get_id ) );
+    $self->unlock();
+    $ret;
 }
 
 sub EXISTS {
     print "EXISTS(@_)$/" if $debug >= 2;
     my $self  = shift;
     my $index = shift;
-    $self->send( "DELETE:" . ( $self->get_id ) . ":$index" );
+    $self->lock();
+    my $ret = $self->send( "DELETE:" . ( $self->get_id ) . ":$index" );
+    $self->unlock();
+    $ret;
 }
 
 sub FIRSTKEY {
     print "FIRSTKEY(@_)$/" if $debug >= 2;
     my $self = shift;
+    $self->lock();
     my $ret = $self->send( "FIRSTKEY:" . ( $self->get_id ) );
+    $self->unlock();
     return unless $ret;
     $ret;
 }
@@ -92,7 +112,9 @@ sub NEXTKEY {
     print "NEXTKEY(@_)$/" if $debug >= 2;
     my $self = shift;
     my $last = shift;
-    my $ret  = $self->send( "NEXTKEY:" . ( $self->get_id ) . ":$last" );
+    $self->lock();
+    my $ret = $self->send( "NEXTKEY:" . ( $self->get_id ) . ":$last" );
+    $self->unlock();
     return unless $ret;
     $ret;
 }
@@ -100,7 +122,10 @@ sub NEXTKEY {
 sub SCALAR {
     print "SCALAR(@_)$/" if $debug >= 2;
     my $self = shift;
-    $self->send( "SCALAR:" . ( $self->get_id ) . ":$index" );
+    $self->lock();
+    my $ret = $self->send( "SCALAR:" . ( $self->get_id ) . ":$index" );
+    $self->unlock();
+    $ret;
 }
 
 42;

@@ -32,47 +32,52 @@ sub connect {
 
 sub lock {
     my $self = shift;
-    my $tid  = shift;
+    my $tid = shift || $main::_tid;
+    $self->{"times"}->{$tid} ||= 0;
+    print " - trying to lock $tid ($self->{times})$/" if $debug >= 2;
     $tid = 0 if $tid eq "main";
     my $resp = 0;
-    $resp = $self->send( "LOCK:" . ( join ":", $self->get_id, $tid ) ), $/
-      while not $resp
-          and usleep 5;
+    if($self->{"times"}->{$tid} == 0) {
+        until($resp == 1) {
+            usleep 5;
+            my $temp = $self->send( "LOCK:" . ( join ":", $self->get_id(), $tid ) );
+            $resp = $1 if defined $temp and $temp =~ /^(\d)$/;
+        }
+    }
+    $self->{"times"}->{$tid}++;
+    return;
 }
 
 sub unlock {
     my $self = shift;
-    my $tid  = shift;
-    $self->send( "UNLOCK:" . ( join ":", $self->get_id, $tid ) );
+    my $tid = shift || $main::_tid;
+    print " - trying to unlock $tid ($self->{times})$/" if $debug >= 2;
+    $self->{"times"}->{$tid}--;
+    if($self->{"times"}->{$tid} == 0) {
+        my $resp = 0;
+        until($resp == 1) {
+            usleep 5;
+            my $temp = $self->send( "UNLOCK:" . ( join ":", $self->get_id, $tid ) );
+            $resp = $1 if defined $temp and $temp =~ /^(\d)$/;
+        }
+    }
+    return;
 }
 
 sub debug {
     shift;
     $debug = shift;
-    threads::emulate::share::Scalar->debug($debug);
-    threads::emulate::share::Array->debug($debug);
-    threads::emulate::share::Hash->debug($debug);
 }
 
 no strict 'subs';
-no warnings;
+no warnings 'syntax';
 
-sub UNIVERSAL::shared : ATTR(SCALAR) {
+sub UNIVERSAL::Shared : ATTR(ANY) {
     my $var = $_[2];
-    easyshare_attr($var);
+    share($var);
 }
 
-sub UNIVERSAL::shared : ATTR(ARRAY) {
-    my $var = $_[2];
-    easyshare_attr($var);
-}
-
-sub UNIVERSAL::shared : ATTR(HASH) {
-    my $var = $_[2];
-    easyshare_attr($var);
-}
-
-sub easyshare_attr {
+sub share {
     no strict 'subs';
     my $ref  = shift;
     my $id   = shift;
@@ -87,9 +92,9 @@ sub easyshare_attr {
     tie $$ref, threads::emulate::share::Scalar, $id, $$ref if $type eq "SCALAR";
     tie @$ref, threads::emulate::share::Array,  $id, @$ref if $type eq "ARRAY";
     tie %$ref, threads::emulate::share::Hash,   $id, %$ref if $type eq "HASH";
-    if ( defined $type and $type !~ /SCALAR|ARRAY|HASH/ ) {
+    if ( defined $type and $type !~ /^(?:SCALAR|ARRAY|HASH|CODE)$/ ) {
         my $unblessed = unbless($ref);
-        $ref = easyshare_attr($unblessed);
+        $ref = share($unblessed);
         my $obj = get_obj($ref);
         $obj->obj_type($type) if $type;
     }
@@ -139,7 +144,7 @@ sub get_ref_or_value {
             $ref = \"" if $2 eq "SCALAR";
             $ref = []  if $2 eq "ARRAY";
             $ref = {}  if $2 eq "HASH";
-            threads::emulate::share::easyshare_attr( $ref, $id );
+            threads::emulate::share::share( $ref, $id );
             $value = $ref;
         }
     }
@@ -156,7 +161,9 @@ sub send {
     my $msg  = shift;
     {
         local $\ = "\r\n";
+        #$, = " ";
         my $sock = $self->{sock};
+        #print {$sock} unpack "C*", $msg;
         print {$sock} $msg;
     }
     my $resp = $self->read;
@@ -169,7 +176,9 @@ sub read {
     {
         local $/ = "\r\n";
         my $sock = $self->{sock};
-        chomp( $resp = scalar <$sock> );
+        $resp = scalar <$sock>;
+        chomp( $resp ) if defined $resp;
+        $resp =~ s/\r\n?$// if defined $resp;
     }
     $resp;
 }
@@ -190,17 +199,17 @@ sub value_or_id {
     my $ret;
     my $obj;
     my $type;
-    if ( my $ref = ref $value
-        or $value =~ /^(?:fer(SCALAR|ARRAY|HASH)\(\d+\))$/ )
+    if ( defined $value and (my $ref = ref $value
+        or $value =~ /^(?:fer(SCALAR|ARRAY|HASH)\(\d+\))$/) )
     {
         $type = $1;
-        if ( $ref eq "SCALAR" or $type eq "SCALAR" ) {
+        if ( defined $ref and $ref eq "SCALAR" or defined $type and $type eq "SCALAR" ) {
             $ret = $obj->get_id if $obj = tied $$value;
         }
-        elsif ( $ref eq "ARRAY" or $type eq "ARRAY" ) {
+        elsif ( defined $ref and $ref eq "ARRAY" or defined $type and $type eq "ARRAY" ) {
             $ret = $obj->get_id if $obj = tied @$value;
         }
-        elsif ( $ref eq "HASH" or $type eq "HASH" ) {
+        elsif ( defined $ref and $ref eq "HASH" or defined $type and $type eq "HASH" ) {
             $ret = $obj->get_id if $obj = tied %$value;
         }
     }
@@ -221,6 +230,19 @@ sub obj_type {
 sub get_obj_type {
     my $self = shift;
     $self->send( "getobjtype:" . $self->get_id ) if $self;
+}
+
+sub obj_type_on_index {
+    my $self  = shift;
+    my $index = shift;
+    my $type  = shift;
+    $self->send( "objtypeonindex:" . $self->get_id . ":$index:$type" ) if $self;
+}
+
+sub get_obj_type_on_index {
+    my $self  = shift;
+    my $index = shift;
+    $self->send( "getobjtypeonindex:" . $self->get_id . ":$index" ) if $self;
 }
 
 42;

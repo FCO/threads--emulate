@@ -9,10 +9,10 @@ use warnings;
 
 use threads::emulate noFork => 0;
 
-our $debug = 0;
+our $debug = 3;
 
 sub TIESCALAR {
-    print scalar caller, " TIESCALAR(@_)$/" if $debug >= 2;
+    print "TIESCALAR()$/" if $debug >= 2;
     my $self     = bless {}, shift;
     my $id       = shift;
     my $value    = shift;
@@ -25,9 +25,9 @@ sub TIESCALAR {
     else {
         $self->set_id( $self->send("CREATE:SCALAR") );
     }
-    $self->lock(&main::get_tid);
+    $self->lock();
     $self->STORE($value) if defined $value;
-    $self->unlock(&main::get_tid);
+    $self->unlock();
     $self;
 }
 
@@ -35,23 +35,39 @@ sub FETCH {
     print "FETCH(@_)$/" if $debug >= 2;
     my $self = shift;
     my $name = $self->{name};
-    $self->lock(&main::get_tid);
-    my $value = $self->send( "FETCH:" . $self->get_id );
-    $self->unlock(&main::get_tid);
-    $self->get_ref_or_value($value);
+    $self->lock();
+    my $value = join ":", $self->send( "FETCH:" . $self->get_id );
+    my $ret;
+    if($self->get_obj_type eq "1CODE1") {
+        $ret = eval "sub $value";
+    }else{
+        $ret   = $self->get_ref_or_value($value);
+    }
+    $self->unlock();
+#print "FETCH: $ret$/";
+    $ret;
 }
 
 sub STORE {
     print "STORE(@_)$/" if $debug >= 2;
     print "lock()$/"    if $debug >= 1;
     my $self = shift;
-    $self->lock(&main::get_tid);
-    my $value = shift;
-    $value =
-      ref $value ? threads::emulate::share::easyshare_attr($value) : $value;
+    $self->lock();
+    #my $value = join ":", @_ if @_ > 1;
+    my $value    = shift;
+    $self->obj_type("");
+    if(ref $value eq "CODE") {
+        $self->obj_type("1CODE1");
+        use B::Deparse;
+        $value = B::Deparse->new->coderef2text($value);
+    }else{
+        $value =
+          ref $value ? threads::emulate::share::share($value) : $value;
+    }
+#print "value: $value$/" if defined $value;
     $self->send(
         "STORE:" . ( $self->get_id ) . ":" . $self->value_or_id($value) );
-    $self->unlock(&main::get_tid);
+    $self->unlock();
 }
 
 42;

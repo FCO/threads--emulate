@@ -12,9 +12,9 @@ use threads::emulate::master::Hash;
 use strict;
 use warnings;
 
-our ( $sockpath, $obj, %vars, %threads );
-$main::tid = 0;
+$threads::emulate::VERSION = 0.1;
 
+our ( $sockpath, $obj, %vars, %threads );
 my $thread_id = 0;
 
 $main::_tid = 0;
@@ -37,27 +37,31 @@ sub get_obj {
 }
 
 our @lock;
+our @pids;
 {
     my $tid;
 
-    sub main::async (&) {
+    sub async (&) {
         my $sub   = shift;
-        my $run   = shift;
+        #my $run   = shift;
         my $async = threads::emulate::async->new($sub);
+        push @pids, $async->get_pid;
         $thread_id = $async->get_tid;
-        @{ $async->{"return"} } = ();
-        push @{ $async->{"return"} }, $async->run;
+        $async->run;
+        $thread_id = 0;
         $async;
     }
 }
 
-sub main::lock {
+sub lock {
+#print "lock(@_, $thread_id)$/";
     my $var = shift;
     obj_exec( $var, "lock", $thread_id );
     push @lock, $var;
 }
 
-sub main::unlock {
+sub unlock {
+#print "unlock(@_, $thread_id)$/";
     my $var = shift;
     obj_exec( $var, "unlock", $thread_id );
     @lock = grep { $_ ne $var } @lock;
@@ -94,11 +98,12 @@ sub _master {
     $SIG{INT} = sub { exit(0) };
     $thread_id = "master";
     my @cmds = qw/
-      FETCH  STORE    FETCHSIZE STORESIZE
-      EXTEND EXISTS   DELETE    CLEAR
-      PUSH   POP      SHIFT     UNSHIFT
-      SPLICE FIRSTKEY NEXTKEY   SCALAR
-      LOCK   UNLOCK   objtype   getobjtype
+      FETCH          STORE             FETCHSIZE STORESIZE
+      EXTEND         EXISTS            DELETE    CLEAR
+      PUSH           POP               SHIFT     UNSHIFT
+      SPLICE         FIRSTKEY          NEXTKEY   SCALAR
+      LOCK           UNLOCK            objtype   getobjtype
+      objtypeonindex getobjtypeonindex
       /;
 
     my $commands = join "|", @cmds;
@@ -123,8 +128,11 @@ sub _master {
                 {
                     local $/ = "\r\n";
                     $msg = scalar <$new_sock>;
+                    chomp($msg) if defined $msg;
+                    $msg =~ s/\r\n?$// if defined $msg;
                 }
                 $msg =~ s/\r\n$// if defined $msg;
+#print "msg: ($msg)$/" if defined $msg;
                 last SOCK if defined $msg and $msg eq "EXIT";
                 next unless defined $msg;
                 if ( $msg =~ /^CREATE:(SCALAR|ARRAY|HASH)$/ ) {
@@ -136,16 +144,21 @@ sub _master {
                     next FOR;
                 }
                 elsif ( $msg =~
-                    /^($commands):(fer(?:SCALAR|ARRAY|HASH)\(\d+\)):?(.*)$/ )
+                    /^($commands):(fer(?:SCALAR|ARRAY|HASH)\(\d+\)):?(.*)$/ms )
                 {
-                    my $resp = $vars{$2}->$1( split /:/, $3 );
+                    my $resp = $vars{$2}->$1( split /:/, "$3:$/" );
+#print "resp: ($resp)$/" if defined $resp;
                     master_send( $new_sock, $resp );
+                }
+                else {
+                    if (defined $msg and $msg) {
+                        master_send( $new_sock, $msg );
+                    }
                 }
             }
         }
     }
     $_->close for $select->handles;
-    print "SAINDO!$/";
     exit(0);
 }
 
@@ -153,6 +166,7 @@ sub master_send {
     my $sock = shift;
     my $msg  = shift;
     local $\ = "\r\n";
+    local $, = " ";
     if ( defined $msg ) {
         print {$sock} $msg;
     }
@@ -170,70 +184,57 @@ sub import {
     my $count;
     our $obj = $self;
     require threads::emulate::async;
-    $self;
+
+    no strict 'refs';
+    my $caller = scalar caller;
+    *{$caller . "::async"} = \&async;
+    *{$caller . "::lock"} = \&lock;
+    *{$caller . "::unlock"} = \&unlock;
 }
 
 sub send {
     my $self = shift;
     my $msg  = shift;
+    my $sock = shift;
     {
         local $\ = "\r\n";
-        my $sock = $self->{sock};
+        #local $, = " ";
+        $sock ||= $self->{sock};
         print {$sock} $msg;
     }
-    my $resp = $self->read;
+    my $resp = $self->read($sock);
     $resp;
 }
 
 sub read {
     my $self = shift;
+    my $sock = shift;
     my $resp;
     {
         local $/ = "\r\n";
-        my $sock = $self->{sock};
-        chomp( $resp = scalar <$sock> );
+        $sock ||= $self->{sock};
+        $resp = scalar <$sock>;
+        chomp( $resp ) if defined $resp;
     }
     $resp;
 }
 
 sub _exit {
-    my $self = shift || {};
-    return if $thread_id ne "0";
-    $thread_id = "done";
-    my $count;
-    until ( -S $sockpath ) {
-        ++$count < 600 || die "...";
-        usleep 50;
+    my $self = shift;
+    for(@pids) {
+       kill 9 => $_ if /^\d+$/ and kill 0 => $_;
     }
     $self->{sock} =
       IO::Socket::UNIX->new( Type => SOCK_STREAM, Peer => $sockpath );
     $self->{sock}->autoflush(1);
-    $count = 0;
-    for ( keys %threads ) {
-        $count++ if kill 0 => $threads{$_};
-
-        #kill 9 => $threads{$_};
-    }
-
-#printf {STDERR} "Program finished with %s thread%s running.$/", $count, ($count>1?"s":"") if $count;
     $self->send("EXIT");
+    1;
 }
 
 sub DESTROY {
     my $self = shift;
-    $self->_exit;    # if $thread_id eq "0";
+    $self->_exit if $thread_id eq "0";
+    wait if $thread_id eq "0";
+    unlink $sockpath if $thread_id eq "0";
 }
-
-END {
-    kill 2 => $pid;
-    _exit();
-
-    #for(keys %threads) {
-    #   kill 9 => $threads{$_};
-    #}
-    #kill 9 => -$$;
-    wait;
-    unlink $sockpath if $thread_id eq "master";
-}
-
 42;

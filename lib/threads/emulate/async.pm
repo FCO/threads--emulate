@@ -2,7 +2,7 @@ package threads::emulate::async;
 use Time::HiRes qw/usleep/;
 use Config;
 our $tid;
-our %hash : shared;
+our %hash : Shared;
 our %sub;
 
 use strict;
@@ -27,12 +27,17 @@ sub run {
     return if $pid;
     $main::_tid       = $tid;
     $self->{pid}      = $$;
-    $self->{"return"} = [];
-    push @{ $self->{"return"} }, $sub{ $self->{tid} }->(@pars)
-      if ref $self->{"return"};
-    main::unlock($_) for @threads::emulate::lock;
-    kill 9 => $$;
-    die;
+    $self->{returned} = [];
+    threads::emulate::lock($self->{returned});
+    no strict 'refs';
+    my @ret = $sub{ $self->{tid} }->(@pars) if @pars;
+    @ret = $sub{ $self->{tid} }->() unless @pars;
+    use strict;
+    $self->{"return"} = [@ret]
+      if @ret or ref $self->{"return"} eq "ARRAY";
+      #if @ret and ref $self->{"return"};
+    threads::emulate::unlock($self->{returned});
+    threads::emulate::unlock($_) for @threads::emulate::lock;
     exit(0);
     print "Não saí!!!$/";
 }
@@ -50,12 +55,17 @@ sub kill {
     else {
         die "Signal \"$signal\" unknow$/";
     }
-    kill $sig => $self->{pid};
+    kill $1 => $self->{pid} if $sig =~ /^(\d+)$/ and $sig >= 0;
 }
 
-sub main::get_tid {
-    $main::_tid;
+sub get_pid {
+   my $self = shift;
+   $self->{pid}
 }
+
+#sub get_tid {
+#    $main::_tid || 0;
+#}
 
 sub get_tid {
     my $self = shift;
@@ -70,15 +80,24 @@ sub join {
 sub get_return {
     my $self = shift;
     my %par  = @_;
-    return @{ $self->{"return"} } if not exists $par{BLOCK} or not $par{BLOCK};
-
-    #unless($filho) {
-    until ( @{ $self->{"return"} } ) {
-        usleep 50;
+    if(not exists $par{BLOCK} or not $par{BLOCK}) {
+        return unless ref $self->{"return"};
+        return @{ $self->{"return"} } if wantarray;
+        return $self->{"return"}->[0] unless wantarray;
     }
-
-    #}
-    @{ $self->{"return"} };
+    # until ( exists $self->{returned} and $self->{returned} ) {
+    #     usleep 50;
+    # }
+    threads::emulate::lock($self->{returned});
+    no strict 'refs';
+    if(wantarray) {
+        threads::emulate::unlock($self->{returned});
+        return @{ $self->{"return"} } if ref $self->{"return"};
+    }else{
+        threads::emulate::unlock($self->{returned});
+        return $self->{"return"}->[0] if ref $self->{"return"};
+    }
+    use strict;
 }
 
 42;
