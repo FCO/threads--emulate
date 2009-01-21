@@ -9,7 +9,7 @@ use warnings;
 
 use threads::emulate noFork => 0;
 
-our $debug = 3;
+our $debug = 0;
 
 sub TIESCALAR {
     print "TIESCALAR()$/" if $debug >= 2;
