@@ -34,9 +34,8 @@ sub TIESCALAR {
 sub FETCH {
     print "FETCH(@_)$/" if $debug >= 2;
     my $self = shift;
-    my $name = $self->{name};
-    $self->lock();
-    my $value = join ":", $self->send( "FETCH:" . $self->get_id );
+    my $a = $self->lock();
+    my $value = $self->send( "FETCH:" . $self->get_id );
     my $ret;
     if($self->get_obj_type eq "1CODE1") {
         $ret = eval "sub $value";
@@ -44,17 +43,15 @@ sub FETCH {
         $ret   = $self->get_ref_or_value($value);
     }
     $self->unlock();
-#print "FETCH: $ret$/";
     $ret;
 }
 
 sub STORE {
     print "STORE(@_)$/" if $debug >= 2;
     print "lock()$/"    if $debug >= 1;
-    my $self = shift;
-    $self->lock();
-    #my $value = join ":", @_ if @_ > 1;
+    my $self     = shift;
     my $value    = shift;
+    $self->lock();
     $self->obj_type("");
     if(ref $value eq "CODE") {
         $self->obj_type("1CODE1");

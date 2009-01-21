@@ -28,6 +28,7 @@ sub run {
     $main::_tid       = $tid;
     $self->{pid}      = $$;
     $self->{returned} = [];
+    @threads::emulate::lock = ();
     threads::emulate::lock($self->{returned});
     no strict 'refs';
     my @ret = $sub{ $self->{tid} }->(@pars) if @pars;
@@ -35,7 +36,6 @@ sub run {
     use strict;
     $self->{"return"} = [@ret]
       if @ret or ref $self->{"return"} eq "ARRAY";
-      #if @ret and ref $self->{"return"};
     threads::emulate::unlock($self->{returned});
     threads::emulate::unlock($_) for @threads::emulate::lock;
     exit(0);

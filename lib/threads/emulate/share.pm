@@ -39,13 +39,14 @@ sub lock {
     my $resp = 0;
     if($self->{"times"}->{$tid} == 0) {
         until($resp == 1) {
-            usleep 5;
             my $temp = $self->send( "LOCK:" . ( join ":", $self->get_id(), $tid ) );
             $resp = $1 if defined $temp and $temp =~ /^(\d)$/;
+            last if $resp;
+            usleep 5;
         }
     }
     $self->{"times"}->{$tid}++;
-    return;
+    return $resp;
 }
 
 sub unlock {
@@ -53,15 +54,15 @@ sub unlock {
     my $tid = shift || $main::_tid;
     print " - trying to unlock $tid ($self->{times})$/" if $debug >= 2;
     $self->{"times"}->{$tid}--;
+    my $resp = 0;
     if($self->{"times"}->{$tid} == 0) {
-        my $resp = 0;
-        until($resp == 1) {
-            usleep 5;
+        #until($resp == 1) {
+            usleep 500;
             my $temp = $self->send( "UNLOCK:" . ( join ":", $self->get_id, $tid ) );
             $resp = $1 if defined $temp and $temp =~ /^(\d)$/;
-        }
+        #}
     }
-    return;
+    return $resp;
 }
 
 sub debug {
@@ -137,7 +138,8 @@ sub get_ref_or_value {
     my $self  = shift;
     my $id    = shift;
     my $value = $id;
-    if ( $value =~ /^(fer(SCALAR|ARRAY|HASH)\(\d+\))$/ ) {
+#print "value: $value$/";
+    if ( $value =~ /^(shared(SCALAR|ARRAY|HASH)\(\d+\))$/ ) {
         $value = $vars{$1};
         unless ( ref $value ) {
             my $ref;
@@ -156,7 +158,27 @@ sub get_ref_or_value {
     $value;
 }
 
-sub send {
+{
+   my $msg_id = 1;
+   sub send {
+      my $self = shift;
+      my $msg = join "", @_;
+      my $reply;
+      my $reply_id;
+      $msg_id = $msg_id < 9999 ? $msg_id + 1 : 1;
+
+      until(defined $reply_id and $reply_id == $msg_id) {
+         $self->write("$msg_id:$msg");
+         $reply = $self->read;
+         next if $reply eq "ERROR";
+         $reply_id = $1 if $reply =~ s/^(\d+)://;
+         next unless defined $reply_id and $reply_id =~ /^\d+$/;
+      }
+      $reply
+   }
+}
+
+sub write {
     my $self = shift;
     my $msg  = shift;
     {
@@ -166,8 +188,6 @@ sub send {
         #print {$sock} unpack "C*", $msg;
         print {$sock} $msg;
     }
-    my $resp = $self->read;
-    $resp;
 }
 
 sub read {
@@ -200,7 +220,7 @@ sub value_or_id {
     my $obj;
     my $type;
     if ( defined $value and (my $ref = ref $value
-        or $value =~ /^(?:fer(SCALAR|ARRAY|HASH)\(\d+\))$/) )
+        or $value =~ /^(?:shared(SCALAR|ARRAY|HASH)\(\d+\))$/) )
     {
         $type = $1;
         if ( defined $ref and $ref eq "SCALAR" or defined $type and $type eq "SCALAR" ) {

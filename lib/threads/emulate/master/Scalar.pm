@@ -40,7 +40,7 @@ sub LOCK {
 
 sub UNLOCK {
     pop(@_);
-    print "MASTER:UNLOCK(@_)$/" if $debug >= 2;
+    print "MASTER:UNLOCK(@_)$/" if $debug >= 3;
     my $self = shift;
     my $thrT = shift;
     my $thr = $1 if $thrT =~ /^(\d+)$/;
@@ -51,7 +51,7 @@ sub UNLOCK {
         $ret = 1;
     }
     else {
-        warn "Var locked by another thread...$/";
+        warn "Thread $thr trying to unlock a var locked by another thread $self->{lock}...$/";
         $ret = 0;
     }
     $ret;
@@ -61,7 +61,7 @@ sub FETCH {
     pop(@_);
     print "MASTER:FETCH(@_)$/" if $debug >= 2;
     my $self = shift;
-    return unless exists $self->{value};
+    #return unless exists $self->{value};
     $self->{value};
 }
 

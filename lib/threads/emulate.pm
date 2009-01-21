@@ -43,7 +43,6 @@ our @pids;
 
     sub async (&) {
         my $sub   = shift;
-        #my $run   = shift;
         my $async = threads::emulate::async->new($sub);
         push @pids, $async->get_pid;
         $thread_id = $async->get_tid;
@@ -56,15 +55,17 @@ our @pids;
 sub lock {
 #print "lock(@_, $thread_id)$/";
     my $var = shift;
-    obj_exec( $var, "lock", $thread_id );
+    my $ret = obj_exec( $var, "lock", $thread_id );
     push @lock, $var;
+    return $ret;
 }
 
 sub unlock {
 #print "unlock(@_, $thread_id)$/";
     my $var = shift;
-    obj_exec( $var, "unlock", $thread_id );
+    my $ret = obj_exec( $var, "unlock", $thread_id );
     @lock = grep { $_ ne $var } @lock;
+    $ret
 }
 
 sub obj_exec {
@@ -86,9 +87,6 @@ sub obj_exec {
         else {
             return;
         }
-    }
-    else {
-        return;
     }
     $ret;
 }
@@ -126,33 +124,38 @@ sub _master {
             else {
                 my $msg;
                 {
+                    $new_sock->autoflush(1);
                     local $/ = "\r\n";
                     $msg = scalar <$new_sock>;
                     chomp($msg) if defined $msg;
                     $msg =~ s/\r\n?$// if defined $msg;
                 }
-                $msg =~ s/\r\n$// if defined $msg;
-#print "msg: ($msg)$/" if defined $msg;
                 last SOCK if defined $msg and $msg eq "EXIT";
                 next unless defined $msg;
+                my $msg_id = $1 if $msg =~ s/^(\d+)://;
+                unless($msg_id) {
+                   master_send( $new_sock, "ERROR");
+                   next FOR;
+                }
                 if ( $msg =~ /^CREATE:(SCALAR|ARRAY|HASH)$/ ) {
-                    my $idcomplete = "fer$1(" . ( $id++ ) . ")";
+                    my $idcomplete = "shared$1(" . ( $id++ ) . ")";
                     my $type =
                       "threads::emulate::master::" . ( ucfirst( lc $1 ) );
                     $vars{$idcomplete} = $type->new($idcomplete);
-                    master_send( $new_sock, $idcomplete );
+                    master_send( $new_sock, "$msg_id:$idcomplete" );
                     next FOR;
                 }
                 elsif ( $msg =~
-                    /^($commands):(fer(?:SCALAR|ARRAY|HASH)\(\d+\)):?(.*)$/ms )
+                    /^($commands):(shared(?:SCALAR|ARRAY|HASH)\(\d+\)):?(.*)$/ms )
                 {
                     my $resp = $vars{$2}->$1( split /:/, "$3:$/" );
-#print "resp: ($resp)$/" if defined $resp;
-                    master_send( $new_sock, $resp );
+                    my $send = "$msg_id:" . ($resp ? $resp : "");
+                    master_send( $new_sock, $send );
                 }
                 else {
                     if (defined $msg and $msg) {
-                        master_send( $new_sock, $msg );
+                        warn "WARN: $msg$/";
+                        master_send( $new_sock, "$msg_id:$msg" );
                     }
                 }
             }
