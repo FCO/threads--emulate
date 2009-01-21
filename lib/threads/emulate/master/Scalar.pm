@@ -1,5 +1,8 @@
 package threads::emulate::master::Scalar;
 
+use strict;
+use warnings;
+
 our $debug = 0;
 
 sub new {

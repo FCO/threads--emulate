@@ -3,6 +3,9 @@ use threads::emulate::share;
 use base threads::emulate::share;
 use IO::Socket;
 
+use strict;
+use warnings;
+
 our $debug = 0;
 
 sub prepare_key {
@@ -74,7 +77,7 @@ sub DELETE {
     my $self  = shift;
     my $index = shift;
     $self->lock();
-    $self->send( "DELETE:" . ( $self->get_id ) . ":$index" );
+    my $ret = $self->send( "DELETE:" . ( $self->get_id ) . ":$index" );
     $self->unlock();
     $ret;
 }
@@ -123,7 +126,7 @@ sub SCALAR {
     print "SCALAR(@_)$/" if $debug >= 2;
     my $self = shift;
     $self->lock();
-    my $ret = $self->send( "SCALAR:" . ( $self->get_id ) . ":$index" );
+    my $ret = $self->send( "SCALAR:" . ( $self->get_id ) );
     $self->unlock();
     $ret;
 }

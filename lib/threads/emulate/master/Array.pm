@@ -1,5 +1,8 @@
 package threads::emulate::master::Array;
 
+use strict;
+use warnings;
+
 our $debug = 0;
 
 sub new {
@@ -85,23 +88,26 @@ sub STORE {
 
 sub FETCHSIZE {
     pop(@_);
-    print "FETCHSIZE(@_)$/" if $debug >= 2;
-    my $r = shift;
-    scalar @{ $r->{value} } if ref $r->{value} eq "ARRAY";
+    print "FETCHSIZE()$/" if $debug >= 2;
+    my $self = shift;
+    scalar @{ $self->{value} };
 }
 
 sub STORESIZE {
     pop(@_);
     print "STORESIZE(@_)$/" if $debug >= 2;
     print "lock()$/"        if $debug >= 1;
-    @{ shift()->{value} } = (undef) x shift;
+    my $self = shift;
+    my $size = shift;
+    $#{ $self->{value} } = $size;
 }
 
 sub EXTEND {
     pop(@_);
     print "EXTEND(@_)$/" if $debug >= 2;
-    my $r = shift;
-    @{ $r->{value} } = (undef) x shift;
+    my $self = shift;
+    my $size = shift;
+    $#{ $self->{value} } = $size - 1;
 }
 
 sub EXISTS {
@@ -122,8 +128,9 @@ sub DELETE {
 sub CLEAR {
     pop(@_);
     print "CLEAR(@_)$/" if $debug >= 2;
-    $self->{objtypeonindex} = ();
-    @{ shift()->{value} } = ();
+    my $self = shift;
+    $self->{objtypeonindex} = [];
+    $self->{value} = [];
 }
 
 sub PUSH {

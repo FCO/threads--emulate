@@ -40,7 +40,7 @@ SKIP: {
 
 @array = ();
 
-ok(@array == 0, "Shared array accepting \"ERASE\"");
+ok(scalar @array == 0, "Shared array accepting \"ERASE\"");
 
 @array = (1 .. 4);
 

@@ -3,10 +3,13 @@ use threads::emulate::share;
 use base threads::emulate::share;
 use IO::Socket;
 
+use strict;
+use warnings;
+
 our $debug = 0;
 
 sub TIEARRAY {
-    print "TIEARRAY(@_)$/" if $debug >= 2;
+    print "TIEARRAY()$/" if $debug >= 2;
     my $self     = bless {}, shift;
     my $id       = shift;
     my @value    = @_;
@@ -61,7 +64,7 @@ sub STORE {
 }
 
 sub FETCHSIZE {
-    print "FETCHSIZE(@_)$/" if $debug >= 2;
+    print "FETCHSIZE()$/" if $debug >= 2;
     my $self = shift;
     $self->send( "FETCHSIZE:" . ( $self->get_id ) );
 }
@@ -166,14 +169,15 @@ sub UNSHIFT {
     my $self = shift;
     $self->lock();
     my @value = @_;
-    for(@value){
+    my @value_;
+    for my $value (@value){
         if(ref $value eq "CODE") {
-            $self->obj_type_on_index($index, "1CODE1");
+            $self->obj_type_on_index(0, "1CODE1");
             use B::Deparse;
-            push @value, B::Deparse->new->coderef2text($_);
+            push @value_, B::Deparse->new->coderef2text($value);
         }else{
-            push @value,
-              ref $_ ? threads::emulate::share::share($_) : $_;
+            push @value_,
+              ref $_ ? threads::emulate::share::share($value) : $value;
         }
     }
     my $resp = $self->send(
@@ -188,6 +192,7 @@ sub SPLICE {
     my $offset = shift;
     my $length = shift;
     my @value  = @_;
+    my @value_;
     for my $value(@value){
         if(ref $value eq "CODE") {
             use B::Deparse;
