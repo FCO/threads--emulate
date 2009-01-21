@@ -1,6 +1,21 @@
 package threads::emulate;
+
+use 5.008008;
+
 use IO::Socket;
 use IO::Select;
+
+=head1 NAME
+
+threads::emulate - Create and use emulated threads (and share vars easyer)
+
+=head1 VERSION
+
+Version 0.01
+
+=cut
+
+our $VERSION = '0.01';
 
 use threads::emulate::share;
 
@@ -12,7 +27,7 @@ use threads::emulate::master::Hash;
 use strict;
 use warnings;
 
-$threads::emulate::VERSION = 0.1;
+#$threads::emulate::VERSION = 0.1;
 
 our ( $sockpath, $obj, %vars, %threads );
 my $thread_id = 0;
@@ -20,6 +35,48 @@ my $thread_id = 0;
 $main::_tid = 0;
 
 our $pid;
+
+=head1 SYNOPSIS
+
+This module was made because I don't like to have to "declare"
+every "sub-level" of a shared var using C<threads::shared>.
+This is NOT real threads. We use UNIX sockets to emulate shared
+variables.
+
+
+    use threads::emulate;
+    
+    my $shared_var : Shared;
+    
+    $shared_var = [1..5];                      # Congratulations! Now you have a shared array_ref!
+    $shared_var->[5] = {jan => 1, feb => 2};   # Now inside of the array_ref there's a hash_ref!
+    $shared_var->[5]->{obj} = Any::Class->new; # End now there's a object!
+    
+    lock \$shared_var;                         # Yes... ou have to use ref...
+    
+    async{
+        lock \$shared_var;
+        $shared_var->[0] .= "K";
+    };
+    
+    $shared_var->[0] = "O";
+    unlock \$shared_var;
+
+    sleep 1;
+
+    print $shared_var->[0], $/;                # prints "OK" (I hope... :) )
+
+=head1 EXPORT
+
+This module exports 3 functions: async, lock and unlock.
+
+=head1 FUNCTIONS
+
+=head2 _create
+
+Internal use.
+
+=cut
 
 sub _create {
     my $self = shift;
@@ -32,9 +89,21 @@ sub _create {
     }
 }
 
+=head2 get_obj
+
+Internal use.
+
+=cut
+
 sub get_obj {
     our $obj;
 }
+
+=head2 async
+
+This func is exported by default. It receives only one parameter, a sub_ref.
+
+=cut
 
 our @lock;
 our @pids;
@@ -52,6 +121,12 @@ our @pids;
     }
 }
 
+=head2 lock
+
+This func is exported by default. It receives only one parameter, a reference for a shared var.
+
+=cut
+
 sub lock {
 #print "lock(@_, $thread_id)$/";
     my $var = shift;
@@ -60,6 +135,12 @@ sub lock {
     return $ret;
 }
 
+=head2 unlock
+
+This func is exported by default. It receives only one parameter, a reference for a shared var.
+
+=cut
+
 sub unlock {
 #print "unlock(@_, $thread_id)$/";
     my $var = shift;
@@ -67,6 +148,12 @@ sub unlock {
     @lock = grep { $_ ne $var } @lock;
     $ret
 }
+
+=head2 obj_exec
+
+Internal use.
+
+=cut
 
 sub obj_exec {
     my $value  = shift;
@@ -90,6 +177,12 @@ sub obj_exec {
     }
     $ret;
 }
+
+=head2 _master
+
+Internal use.
+
+=cut
 
 sub _master {
     local $SIG{INT} = 'IGNORE';
@@ -165,6 +258,12 @@ sub _master {
     exit(0);
 }
 
+=head2 master_send
+
+Internal use.
+
+=cut
+
 sub master_send {
     my $sock = shift;
     my $msg  = shift;
@@ -179,6 +278,12 @@ sub master_send {
 }
 
 use Time::HiRes qw/usleep/;
+
+=head2 import
+
+Internal use.
+
+=cut
 
 sub import {
     my $class = shift;
@@ -195,6 +300,12 @@ sub import {
     *{$caller . "::unlock"} = \&unlock;
 }
 
+=head2 send
+
+Internal use.
+
+=cut
+
 sub send {
     my $self = shift;
     my $msg  = shift;
@@ -209,6 +320,12 @@ sub send {
     $resp;
 }
 
+=head2 read
+
+Internal use.
+
+=cut
+
 sub read {
     my $self = shift;
     my $sock = shift;
@@ -222,6 +339,12 @@ sub read {
     $resp;
 }
 
+=head2 _exit
+
+Internal use.
+
+=cut
+
 sub _exit {
     my $self = shift;
     for(@pids) {
@@ -234,10 +357,73 @@ sub _exit {
     1;
 }
 
+=head2 DESTROY
+
+DESTROY
+
+=cut
+
 sub DESTROY {
     my $self = shift;
     $self->_exit if $thread_id eq "0";
     wait if $thread_id eq "0";
     unlink $sockpath if $thread_id eq "0";
 }
+
+=head1 AUTHOR
+
+Fernando Correa de Oliveira, C<< <fco at cpan.org> >>
+
+=head1 BUGS
+
+Please report any bugs or feature requests to C<bug-threads-emulate at rt.cpan.org>, or through
+the web interface at L<http://rt.cpan.org/NoAuth/ReportBug.html?Queue=threads-emulate>.  I will be notified, and then you'll
+automatically be notified of progress on your bug as I make changes.
+
+
+
+
+=head1 SUPPORT
+
+You can find documentation for this module with the perldoc command.
+
+    perldoc threads::emulate
+
+
+You can also look for information at:
+
+=over 4
+
+=item * RT: CPAN's request tracker
+
+L<http://rt.cpan.org/NoAuth/Bugs.html?Dist=threads-emulate>
+
+=item * AnnoCPAN: Annotated CPAN documentation
+
+L<http://annocpan.org/dist/threads-emulate>
+
+=item * CPAN Ratings
+
+L<http://cpanratings.perl.org/d/threads-emulate>
+
+=item * Search CPAN
+
+L<http://search.cpan.org/dist/threads-emulate/>
+
+=back
+
+
+=head1 ACKNOWLEDGEMENTS
+
+
+=head1 COPYRIGHT & LICENSE
+
+Copyright 2009 Fernando Correa de Oliveira, all rights reserved.
+
+This program is free software; you can redistribute it and/or modify it
+under the same terms as Perl itself.
+
+
+=cut
+
 42;

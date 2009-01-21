@@ -1,6 +1,6 @@
-use Test::More tests => 39;
+use Test::More tests => 38;
 
-BEGIN { use_ok( 'threads::emulate' ); }
+use threads::emulate;
 
 my $scalar : Shared;
 
@@ -160,3 +160,4 @@ SKIP: {
    ok(eval($dump)->get_1->[5] eq "OK", "Data::Dumper is working in this shared object");
 }
 
+sleep 1;

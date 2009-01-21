@@ -36,7 +36,7 @@ sub getobjtypeonindex {
     pop(@_);
     my $self  = shift;
     my $index = shift;
-    $self->{objtypeonindex}->{$index};
+    $self->{objtypeonindex}->{$index} if exists $self->{objtypeonindex} and ref $self->{objtypeonindex} eq "HASH";
 }
 
 sub LOCK {
@@ -90,7 +90,7 @@ sub FETCHSIZE {
     pop(@_);
     print "FETCHSIZE()$/" if $debug >= 2;
     my $self = shift;
-    scalar @{ $self->{value} };
+    scalar @{ $self->{value} } if exists $self->{value} and ref $self->{value} eq "ARRAY";
 }
 
 sub STORESIZE {
@@ -121,7 +121,7 @@ sub DELETE {
     print "DELETE(@_)$/" if $debug >= 2;
     my $self  = shift;
     my $index = shift;
-    delete $self->{objtypeonindex}->{$index} if exists $self->{objtypeonindex}->{$index};
+    delete $self->{objtypeonindex}->{$index} if exists $self->{objtypeonindex} and ref $self->{objtypeonindex} eq "HASH";
     delete $self->{value}->[ $index ];
 }
 
@@ -149,7 +149,7 @@ sub POP {
     print "POP(@_)$/" if $debug >= 2;
     my $self = shift;
     my $index = $self->FETCHSIZE;
-    delete $self->{objtypeonindex}->{$index} if exists $self->{objtypeonindex} and exists $self->{objtypeonindex}->{$index};
+    delete $self->{objtypeonindex}->{$index} if exists $self->{objtypeonindex} and ref $self->{objtypeonindex} eq "HASH";
     pop @{ $self->{value} };
 }
 
@@ -157,8 +157,10 @@ sub SHIFT {
     pop(@_);
     print "SHIFT(@_)$/" if $debug >= 2;
     my $self = shift;
-    my %temp = map { $_ - 1 => $self->{objtypeonindex}->{$_} } keys %{ $self->{objtypeonindex} };
-    $self->{objtypeonindex} = { %temp };
+    if(exists $self->{objtypeonindex} and ref $self->{objtypeonindex} eq "HASH") {
+        my %temp = map { $_ - 1 => $self->{objtypeonindex}->{$_} } keys %{ $self->{objtypeonindex} };
+        $self->{objtypeonindex} = { %temp };
+    }
     shift @{ $self->{value} };
 }
 
@@ -178,12 +180,15 @@ sub SPLICE {
     my @value  = @_;
     my $qtd = @value;
     my @temp;
-    for my $key (keys %{$self->{objtypeonindex}}){
-        $temp[$key] = $self->{objtypeonindex}->{$key};
+    if(exists $self->{objtypeonindex} and ref $self->{objtypeonindex} eq "HASH") {
+        for my $key (keys %{$self->{objtypeonindex}}){
+            $temp[$key] = $self->{objtypeonindex}->{$key};
+        }
     }
+    $#temp = $offset + $length unless $#temp > $offset + $length;
     splice @temp, $offset, $length, (0) x $qtd;
     $self->{objtypeonindex} = { map {$_ => $temp[$_]} grep {$temp[$_]} 0 .. $#temp };
     splice @{ $self->{value} }, $offset, $length, @value;
 }
 
-42;
+my $life = 42;
