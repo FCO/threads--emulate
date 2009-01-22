@@ -40,7 +40,7 @@ SKIP: {
 
 @array = ();
 
-ok(scalar @array == 0, "Shared array accepting \"ERASE\"");
+ok(not(exists($array[0])), "Shared array accepting \"ERASE\"");
 
 @array = (1 .. 4);
 

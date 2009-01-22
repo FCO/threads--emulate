@@ -81,7 +81,7 @@ sub get_return {
     my $self = shift;
     my %par  = @_;
     if(not exists $par{BLOCK} or not $par{BLOCK}) {
-        return unless ref $self->{"return"};
+        return if not ref $self->{"return"} or not exists $self->{"return"}->[0];
         return @{ $self->{"return"} } if wantarray;
         return $self->{"return"}->[0] unless wantarray;
     }

@@ -90,7 +90,8 @@ sub FETCHSIZE {
     pop(@_);
     print "FETCHSIZE()$/" if $debug >= 2;
     my $self = shift;
-    scalar @{ $self->{value} } if exists $self->{value} and ref $self->{value} eq "ARRAY";
+    return 0 if not exists $self->{value} or ref $self->{value} ne "ARRAY" or not exists $self->{value}->[0];
+    scalar @{ $self->{value} }; # if exists $self->{value} and ref $self->{value} eq "ARRAY";
 }
 
 sub STORESIZE {
