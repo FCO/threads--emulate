@@ -52,7 +52,7 @@ variables.
     $shared_var->[5] = {jan => 1, feb => 2};   # Now inside of the array_ref there's a hash_ref!
     $shared_var->[5]->{obj} = Any::Class->new; # End now there's a object!
     
-    lock \$shared_var;                         # Yes... ou have to use ref...
+    lock \$shared_var;                         # Yes... You have to use ref...
     
     async{
         lock \$shared_var;
@@ -72,10 +72,10 @@ This module exports 3 functions: async, lock and unlock.
 
 =head1 FUNCTIONS
 
-=head2 _create
-
-Internal use.
-
+#=head2 _create
+#
+#Internal use.
+#
 =cut
 
 sub _create {
@@ -89,11 +89,11 @@ sub _create {
     }
 }
 
-=head2 get_obj
-
-Internal use.
-
-=cut
+#=head2 get_obj
+#
+#Internal use.
+#
+#=cut
 
 sub get_obj {
     our $obj;
@@ -102,6 +102,7 @@ sub get_obj {
 =head2 async
 
 This func is exported by default. It receives only one parameter, a sub_ref.
+It returns a thread::emulate::async object.
 
 =cut
 
@@ -149,11 +150,11 @@ sub unlock {
     $ret
 }
 
-=head2 obj_exec
-
-Internal use.
-
-=cut
+#=head2 obj_exec
+#
+#Internal use.
+#
+#=cut
 
 sub obj_exec {
     my $value  = shift;
@@ -178,11 +179,11 @@ sub obj_exec {
     $ret;
 }
 
-=head2 _master
-
-Internal use.
-
-=cut
+#=head2 _master
+#
+#Internal use.
+#
+#=cut
 
 sub _master {
     local $SIG{INT} = 'IGNORE';
@@ -258,11 +259,11 @@ sub _master {
     exit(0);
 }
 
-=head2 master_send
-
-Internal use.
-
-=cut
+#=head2 master_send
+#
+#Internal use.
+#
+#=cut
 
 sub master_send {
     my $sock = shift;
@@ -279,11 +280,11 @@ sub master_send {
 
 use Time::HiRes qw/usleep/;
 
-=head2 import
-
-Internal use.
-
-=cut
+#=head2 import
+#
+#Internal use.
+#
+#=cut
 
 sub import {
     my $class = shift;
@@ -300,11 +301,11 @@ sub import {
     *{$caller . "::unlock"} = \&unlock;
 }
 
-=head2 send
-
-Internal use.
-
-=cut
+#=head2 send
+#
+#Internal use.
+#
+#=cut
 
 sub send {
     my $self = shift;
@@ -320,11 +321,11 @@ sub send {
     $resp;
 }
 
-=head2 read
-
-Internal use.
-
-=cut
+#=head2 read
+#
+#Internal use.
+#
+#=cut
 
 sub read {
     my $self = shift;
@@ -339,11 +340,11 @@ sub read {
     $resp;
 }
 
-=head2 _exit
-
-Internal use.
-
-=cut
+#=head2 _exit
+#
+#Internal use.
+#
+#=cut
 
 sub _exit {
     my $self = shift;
@@ -357,11 +358,11 @@ sub _exit {
     1;
 }
 
-=head2 DESTROY
-
-DESTROY
-
-=cut
+#=head2 DESTROY
+#
+#DESTROY
+#
+#=cut
 
 sub DESTROY {
     my $self = shift;
