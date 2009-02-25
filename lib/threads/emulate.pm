@@ -24,6 +24,8 @@ use threads::emulate::master::Scalar;
 use threads::emulate::master::Array;
 use threads::emulate::master::Hash;
 
+use File::Temp;
+
 use strict;
 use warnings;
 
@@ -81,8 +83,9 @@ This module exports 3 functions: async, lock and unlock.
 sub _create {
     my $self = shift;
     my %par  = @_;
-    our $sockpath = "/tmp/" . __PACKAGE__ . ".sock";
+    our $sockpath = (File::Temp::tempfile(OPEN => 0, SUFFIX => ".sock"))[1]; #"/tmp/" . __PACKAGE__ . ".sock";
     unlink $sockpath;
+    threads::emulate::share->set_path($sockpath);
     unless ( exists $par{noFork} and $par{noFork} ) {
         $pid = fork();
         _master() unless $pid;

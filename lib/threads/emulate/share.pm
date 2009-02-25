@@ -16,9 +16,16 @@ our %vars;
 
 our $send_obj = 0;
 
+our $PATH;
+
+sub set_path {
+   shift;
+   $PATH = shift;
+}
+
 sub connect {
     my $self     = shift;
-    my $sockpath = shift;
+    my $sockpath = $PATH || shift;
     my $count;
     until ( $self->{sock} =
           IO::Socket::UNIX->new( Type => SOCK_STREAM, Peer => $sockpath ) )
@@ -84,7 +91,7 @@ sub share {
     my $id   = shift;
     my $type = ref $ref;
     return $ref unless $type;
-    my $sockpath = "/tmp/threads::emulate.sock";
+    my $sockpath = $PATH || "/tmp/threads::emulate.sock";
     my $count;
     until ( -S $sockpath ) {
         ++$count < 600 || die "...";

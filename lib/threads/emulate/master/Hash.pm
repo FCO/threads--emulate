@@ -11,7 +11,7 @@ our $debug = 0;
 sub objtype {
     pop(@_);
     my $self = shift;
-    $self->{objtype} = shift;
+    $self->{objtype} = join ":", @_;
 }
 
 sub getobjtype {

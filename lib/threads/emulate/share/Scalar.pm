@@ -17,7 +17,6 @@ sub TIESCALAR {
     my $id       = shift;
     my $value    = shift;
     my $sockpath = "/tmp/threads::emulate.sock";
-    return unless -S $sockpath;
     $self->connect($sockpath);
     if ( defined $id ) {
         $self->set_id($id);
