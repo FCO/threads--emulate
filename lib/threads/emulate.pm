@@ -1,7 +1,6 @@
 package threads::emulate;
 
 use 5.008008;
-
 use IO::Socket;
 use IO::Select;
 
